@@ -1,0 +1,6 @@
+DataType=Quaternion
+version=3
+OpenSimVersion=4.5
+endheader
+time	femur_r_imu	tibia_r_imu
+1.002873659133911	0.38205,-0.50688,0.46457,-0.61748	0.6349,0.75328,-0.0751,0.15436
