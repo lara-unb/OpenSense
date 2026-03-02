@@ -152,7 +152,7 @@ No OpenSim, um **modelo** (`.osim`) representa a estrutura física (ossos, junta
 * **Abrir o Modelo:** Use `Ctrl + O` ou vá em `File > Open Model` e selecione o arquivo `model.osim`.
 * **Visualização:** Após o carregamento, a interface principal exibirá o modelo esquelético.
 
-![Interface inicial com o modelo carregado](docs/screenshots/modelo_aberto.png)
+![Interface inicial com o modelo carregado](docs/imagens/modelo_aberto.png)
 
 #### 2. Ajustes de Coordenadas
 
@@ -173,7 +173,7 @@ O **IMU Placer** alinha a orientação dos sensores reais ao modelo virtual.
     * *Dica de teste:* Use `examples/exampleLARA/example_filtered_pos.sto`.
 4.  Clique em **Run**. Uma cópia do modelo aparecerá com cubos coloridos indicando o local dos sensores.
 
-![Janela do IMU Placer](docs/screenshots/imu_placer_config.png)
+![Janela do IMU Placer](docs/imagens/imu_placer_config.png)
 
 #### 4. Cinemática Inversa (IMU Inverse Kinematics)
 
@@ -185,5 +185,5 @@ Esta etapa aplica os dados de movimento contínuo ao modelo posicionado.
 3.  Clique em **Run** e aguarde a barra de progresso no canto inferior.
 4.  **Reprodução:** Use o slider de "Play" no topo da tela para visualizar o movimento.
 
-![Animação do movimento final](docs/gifs/resultado_movimento.gif)
+![Animação do movimento final](docs/imagens/resultado_movimento.gif)
 ---
