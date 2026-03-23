@@ -1,3 +1,4 @@
-.envOpensense
+.venv
 utils/__pycache__
 opensim.log
+.envOpensense
