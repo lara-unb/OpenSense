@@ -63,6 +63,7 @@ numpy
 pandas
 scipy
 openpyxl
+streamlit
 ```
 ### 4. Instalação do OpenSim
 
