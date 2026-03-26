@@ -98,14 +98,14 @@ def filter_df(df, imu_labels, OpenSenseQuaternion=True):
     return df_final
 
 
-def json_to_sto(file_name, imu_labels, filter=False):
+def json_to_sto(file_name, imu_labels, suffix='', filter=True, static=False):
 
     file_read = file_name + '.json'
 
     # Read JSON file to Data Frame 
     df = pd.read_json(file_read, lines=True)
 
-    # Drop rows before 0.1s
+    # Drop rows before 1s
     df = df.drop(df[df['time'] < 1].index)
     df = df.reset_index(drop=True)
 
@@ -114,19 +114,19 @@ def json_to_sto(file_name, imu_labels, filter=False):
         df = format_to_sto(imu_label, df)
 
     # Butter Lowpass filter
-    if filter:
+    if filter and not static:
         df = filter_df(df, imu_labels)
     
-    # Save file .sto
-    position_file = file_name + '_pos.sto' if not filter else file_name + '_filtered_pos.sto'
-    motion_file = file_name + '_mov.sto' if not filter else file_name + '_filtered_mov.sto'
-    df.head(1).to_csv(position_file, header=True, index=None, sep='\t', mode='a')
-    df.to_csv(motion_file, header=True, index=None, sep='\t', mode='a')
+    # Save file .sto    
+    file = file_name + suffix + '.sto' if not filter or static else file_name + '_filtered' + suffix + '.sto'
+    if static:
+        df.head(1).to_csv(file, header=True, index=None, sep='\t', mode='a')
+    else:
+        df.to_csv(file, header=True, index=None, sep='\t', mode='a')
 
     # Add header to sto files
     list_of_lines = ['DataType=Quaternion', 'version=3', 'OpenSimVersion=4.5',  'endheader']
-    prepend_multiple_lines(position_file, list_of_lines)
-    prepend_multiple_lines(motion_file, list_of_lines)
+    prepend_multiple_lines(file, list_of_lines)
 
-    print(".sto files saved")
+    print(f"{file} saved")
 

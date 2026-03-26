@@ -1,13 +1,10 @@
 import serial.tools.list_ports
 import time
 import numpy as np
-
-RED = "\033[1;31m"
-CYAN = "\033[1;36m"
-GREEN = "\033[0;32m"
-RESET = "\033[0;0m"
+import sys
 
 SMALL_IMU_DONGLE_PORT = 4128
+IMU_SENSOR_USB = 4144
 
 # If permission denied error occurs in Linux try:
 # sudo chmod 666 /dev/ttyACM0 -> with the correspondent COM port
@@ -17,22 +14,48 @@ def get_dongle_object():
     Returns: 
         serial_port: PySerial object
     """
-
+ 
     # Lists available ports and select dongle port
     ports_list = serial.tools.list_ports.comports()
     print("Ports available: ")
     for wire in ports_list:
-        text = f"Port: {wire.device}\tSerial#:{wire.serial_number}\tDesc:{wire.description} PID {wire.pid}"
+        text = "Port: {0}\tSerial#:{1}\tDesc:{2} PID {3}".format(wire.device, 
+                                                                wire.serial_number, 
+                                                                wire.description,
+                                                                wire.pid)
         print(text)
         if wire.pid == SMALL_IMU_DONGLE_PORT:
             portIMU = wire.device
 
-    # Instantiate seria port object
+    # Instantiate serial port object
     serial_port = serial.Serial(port=portIMU, baudrate=115200, timeout=0.01)
     manual_flush(serial_port)
 
     return serial_port
 
+def get_sensor_object():
+    """ Create a serial port object to operate with imu dongle
+    
+    Returns: 
+        serial_port: PySerial object
+    """
+ 
+    # Lists available ports and select dongle port
+    ports_list = serial.tools.list_ports.comports()
+    print("Ports available: ")
+    for wire in ports_list:
+        text = "Port: {0}\tSerial#:{1}\tDesc:{2} PID {3}".format(wire.device, 
+                                                                wire.serial_number, 
+                                                                wire.description,
+                                                                wire.pid)
+        print(text)
+        if wire.pid == IMU_SENSOR_USB:
+            portIMU = wire.device
+
+    serial_port = serial.Serial(port=portIMU, baudrate=115200, timeout=0.01)
+    manual_flush(serial_port)
+    
+    return serial_port
 
 def manual_flush(serial_port):
     """ Clean serial port buffer
@@ -42,7 +65,6 @@ def manual_flush(serial_port):
     """
     while not serial_port.inWaiting() == 0:
         serial_port.read(serial_port.inWaiting())
-
 
 def create_imu_command(logical_id, command_number, arguments = []):
     """ Create imu command string
@@ -69,7 +91,6 @@ def create_imu_command(logical_id, command_number, arguments = []):
     command += '\n'
     return command.encode()
 
-
 def apply_command(serial_port, command, showResponse=False):
     """ Apply command in sensor
 
@@ -80,12 +101,14 @@ def apply_command(serial_port, command, showResponse=False):
     """
     serial_port.write(command)
     time.sleep(0.1)
+    out = str()
     if(showResponse):
         while serial_port.inWaiting():
             out = '>> ' + serial_port.read(serial_port.inWaiting()).decode()
         print(out)
     time.sleep(0.1)
     # return out
+
 
 
 def stop_streaming(serial_port, logical_ids):
@@ -99,7 +122,6 @@ def stop_streaming(serial_port, logical_ids):
         command = create_imu_command(id, 86)
         apply_command(serial_port, command)
 
-
 def start_streaming(serial_port, logical_ids):
     """ Apply start streaming operation
 
@@ -112,14 +134,12 @@ def start_streaming(serial_port, logical_ids):
         apply_command(serial_port, command)
     return serial_port
 
-
 def clean_data_vector(data):
     decoded_data = data.decode()
     cleaned_data = decoded_data.replace('\r\n',' ').split(' ')
     cleaned_data = list(filter(None, cleaned_data))[0].split(",")
     cleaned_data = [float(d) for d in cleaned_data]
     return cleaned_data
-
 
 def write_command_read_answer(serial_port, logical_ids, command_number, arguments=[]):
     # If it's streaming stop it
@@ -140,7 +160,6 @@ def write_command_read_answer(serial_port, logical_ids, command_number, argument
     # start_streaming(serial_port, logical_ids)
     return answer
 
-
 def set_streaming_slots(serial_port, logical_ids, commands):
     """ Set streaming slots
 
@@ -151,10 +170,9 @@ def set_streaming_slots(serial_port, logical_ids, commands):
     """
     for id in logical_ids:
         command = create_imu_command(id, 80, commands)
-        print(RED, command)
+        # print(command)
         apply_command(serial_port, command, True)
     return serial_port
-
 
 def configure_sensor(serial_port, configDict):
     """ Apply common sensor configuration
@@ -167,10 +185,11 @@ def configure_sensor(serial_port, configDict):
                 "disableAccelerometer": Boolean,
                 "gyroAutoCalib": Boolean,
                 "tareSensor": Boolean,
+                "tareWithQuaternion": dict {imuid : list with quaternions}
                 "filterMode": Integer (see user's manual)
-                "axisDirection": Integer (see user's manual)
                 "logical_ids": list of logical ids,
                 "streaming_commands": list of streaming slots
+                "baudrate": Integer (see user's manual)
         }
     """
     if(configDict["disableGyro"]):
@@ -192,6 +211,17 @@ def configure_sensor(serial_port, configDict):
     for id in configDict["logical_ids"]:
         command = create_imu_command(id, 123, [filterMode])
         apply_command(serial_port, command)
+        
+    baudrate = configDict["baudrate"]
+    if configDict["baudrate"]:
+        for id in configDict["logical_ids"]:
+            command = create_imu_command(id, 231,[baudrate])
+            apply_command(serial_port, command)
+
+    axisDirections = configDict["axisDirections"]
+    for id in configDict["logical_ids"]:
+        command = create_imu_command(id, 116, [axisDirections])
+        apply_command(serial_port, command)
 
     if configDict["gyroAutoCalib"]:
         for id in configDict["logical_ids"]:
@@ -202,15 +232,35 @@ def configure_sensor(serial_port, configDict):
         for id in configDict["logical_ids"]:
             command = create_imu_command(id, 96)
             apply_command(serial_port, command)
-        
-    # # Forcing axis configuration to standar
-    # for id in configDict["logical_ids"]:
-    #     command = create_imu_command(id, 116, [0])
-    #     apply_command(serial_port, command)
-     
-    axisDirections = configDict["axisDirections"]
+    else:
+        for id in configDict["logical_ids"]:
+            command = create_imu_command(id, 97, configDict["tareWithQuaternion"]["imu"+str(id)])
+
+def configure_streaming(serial_port, configDict):
+    """ Apply common sensor configuration
+
+    Args:
+        serial_port: PySerial Object
+        configDict: dictionary with sensor basic configuration {
+                "interval": Integer,
+                "duration": Integer,
+                "delay": Integer,
+                "timestamp": Boolean,
+                "logical_ids": list of logical ids
+        }
+    """
     for id in configDict["logical_ids"]:
-        command = create_imu_command(id, 116, [axisDirections])
+        command = create_imu_command(id, 82, [configDict["interval"], configDict["duration"], configDict["delay"]])
+        apply_command(serial_port, command)
+
+    if configDict["timestamp"]:
+        for id in configDict["logical_ids"]:
+            command = create_imu_command(id, 95, [0])
+            apply_command(serial_port, command)
+
+def get_timestamp(serial_port, logical_ids):
+    for id in logical_ids:
+        command = create_imu_command(id, 83)
         apply_command(serial_port, command)
 
 
@@ -224,7 +274,6 @@ def tare_sensor(serial_port, logical_ids):
     for id in logical_ids:
         command = create_imu_command(id, 96)
         apply_command(serial_port, command)
-
 
 def get_sensor_information(serial_port, logical_ids):
     """ Get some sensor current information such as filter mode and trust values
@@ -242,62 +291,99 @@ def get_sensor_information(serial_port, logical_ids):
         command = create_imu_command(id, 130)
         apply_command(serial_port, command)
 
+def clean_list(data):
+    decoded_data = data.decode()
+    list_data = decoded_data.replace('\r\n',' ').split(' ')
+
+    cleaned_list_data = list(filter(None, list_data))
+    cleaned_list_data[0] = cleaned_list_data[0][3:]
+
+    return cleaned_list_data
 
 # Get rotation matrix streamed in first slot. 
-def extract_rotation_matrix(data):
+def extract_rotation_matrix(data, position):
     """ Manipulate data to obtain rotation matrix
     
     Args:
         data: Raw data that sensor send
+        position: Position of the data extracted on the streaming_commands list
     
     Returns: 
         rotation matrix dictionary
     """
-    decoded_data = data.decode()
-    list_data = decoded_data.replace('\r\n',' ').split(' ')
-    cleaned_list_data = list(filter(None, list_data))
-    rotatation_vector = cleaned_list_data[0][3:].split(',')
+   
+    cleaned_list_data = clean_list(data)
+    rotatation_vector = cleaned_list_data[position].split(',')
     rotatation_vector = np.array(rotatation_vector, dtype=np.float64)
     rotation_matrix = rotatation_vector.reshape((3,3))
-    return {'rotation_matrix': rotation_matrix}
+    return rotation_matrix
 
-
-def extract_euler_angles(data):
+def extract_euler_angles(data, position):
     """ Manipulate data to obtain rotation matrix
     
     Args:
         data: Raw data that sensor send
+        position: Position of the data extracted on the streaming_commands list
     
     Returns: 
         rotation matrix dictionary
     """
-    decoded_data = data.decode()
-    list_data = decoded_data.replace('\r\n',' ').split(' ')
-    cleaned_list_data = list(filter(None, list_data))
-    euler_vector = cleaned_list_data[0][3:].split(',')
+    cleaned_list_data = clean_list(data)
+
+    euler_vector = cleaned_list_data[position].split(',')
     euler_vector = np.array(euler_vector, dtype=np.float64)
-    return {'euler_vector': euler_vector}
+    return euler_vector
 
-
-def extract_quaternions(data):
+def extract_quaternions(data, position):
     """ Manipulate data to obtain rotation matrix
     
     Args:
         data: Raw data that sensor send
+        position: Position of the data extracted on the streaming_commands list
     
     Returns: 
         rotation matrix dictionary
     """
-    decoded_data = data.decode()
-    list_data = decoded_data.replace('\r\n',' ').split(' ')
-    cleaned_list_data = list(filter(None, list_data))
-    quaternion = cleaned_list_data[0][3:].split(',')
+    cleaned_list_data = clean_list(data)
+    
+    quaternion = cleaned_list_data[position].split(',')
     quaternion = np.array(quaternion, dtype=np.float64)
+    return quaternion
+
+def extract_gyro(data, position):
+    """ Manipulate data to obtain rotation matrix
     
-    return {'quaternions': quaternion}
+    Args:
+        data: Raw data that sensor send
+        position: Position of the data extracted on the streaming_commands list
+    
+    Returns: 
+        rotation matrix dictionary
+    """
+    cleaned_list_data = clean_list(data)
+    
+    gyro = cleaned_list_data[position].split(',')
+    gyro = np.array(gyro, dtype=np.float64)
+    return gyro
+
+def extract_accel(data, position):
+    """ Manipulate data to obtain rotation matrix
+    
+    Args:
+        data: Raw data that sensor send
+        position: Position of the data extracted on the streaming_commands list
+    
+    Returns: 
+        rotation matrix dictionary
+    """
+    cleaned_list_data = clean_list(data)
+    accel = cleaned_list_data[position].split(',')
+
+    accel = np.array(accel, dtype=np.float64)
+    return accel
 
 
-def extract_acc_quat(data):
+def extract_acc_quat(data): # old
     """ Manipulate data to obtain rotation matrix
     
     Args:
@@ -306,23 +392,22 @@ def extract_acc_quat(data):
     Returns: 
         rotation matrix dictionary
     """
-    #print('COMEÇOU ESSA FUNCAO')
-    decoded_data = data.decode()
-    list_data = decoded_data.replace('\r\n',' ').split(' ')
-    cleaned_list_data = list(filter(None, list_data))
-    #print(cleaned_list_data)
-    acc = cleaned_list_data[0][3:].split(',')
-    #print(acc)
+    cleaned_list_data = clean_list(data)
+    acc = cleaned_list_data[0].split(',')
     quaternion = cleaned_list_data[1][:].split(',')
-    #print(quaternion)
 
     acc = np.array(acc, dtype=np.float64)
-    #print(acc)
     quaternion = np.array(quaternion, dtype=np.float64)
-    #print(quaternion)
+
 
     return {'acc': acc, 'quaternions': quaternion}
 
+def extract_button(data, position):
+    cleaned_list_data = clean_list(data)
+
+    button = cleaned_list_data[position].split(',')
+
+    return button
 
 def initialize_imu(configuration_dict):
     """ Initialize imu dongle and sensor
@@ -335,9 +420,9 @@ def initialize_imu(configuration_dict):
                 "gyroAutoCalib": Boolean,
                 "tareSensor": Boolean,
                 "filterMode": Integer (see user's manual)
-                "axisDirections": Integer (see user's manual)
                 "logical_ids": list of logical ids,
-                "streaming_commands": list of streaming slots
+                "streaming_commands": list of streaming slots,
+                "timestamp": Boolean
         }
     
     Returns:
@@ -347,7 +432,7 @@ def initialize_imu(configuration_dict):
     # Find and open serial port for the IMU dongle
     print("Getting imu object:")
     serial_port = get_dongle_object()
-    print(GREEN, "Done.", RESET)
+    print("Done.")
 
     # Clean outputs 
     manual_flush(serial_port)
@@ -371,13 +456,64 @@ def initialize_imu(configuration_dict):
     # Set magnetometer(explain it better), calibGyro if calibGyro=True and Tare sensor
     print('Starting configuration: ')
     configure_sensor(serial_port, configuration_dict)
-    print(GREEN, "Done.", RESET)
+    print("Done.")
 
 
-    print(CYAN, "Starting streamnig.", RESET)
+    print("Starting streaming.")
     # Start streaming
     start_streaming(serial_port, configuration_dict['logical_ids'])
     
-    print(GREEN, "IMU's ready to use.", RESET)
+    print("IMU's ready to use.")
 
     return serial_port
+
+def initialize_dongle(imu_ids):
+    # Find and open serial port for the IMU dongle
+    print("Getting imu object:")
+    serial_port = get_dongle_object()
+    print("Done.")
+
+    # Clean outputs 
+    manual_flush(serial_port)
+
+    # Stop streaming
+    print("Stoping streaming.")
+    stop_streaming(serial_port, imu_ids)
+
+    return serial_port
+
+def initialize_sensor(imu_ids):
+    # Find and open serial port for the IMU dongle
+    print("Getting imu object:")
+    serial_port = get_sensor_object()
+    print("Done.")
+
+    # Clean outputs 
+    manual_flush(serial_port)
+
+    # Stop streaming
+    print("Stoping streaming.")
+    stop_streaming(serial_port, imu_ids)
+
+    return serial_port
+
+#same, but does not include start streaming or initializing the dongle
+def revised_initialize_imu(serial_port, configuration_dict):
+     
+
+
+    # Setting streaming slots, this means that while streaming sensors will send
+    # this data to the dongle as in page 29 - User manual: 
+    # 0 - Differential quaternions; 
+    # 1 - tared orientation as euler angles; 
+    # 2 - rotation matrix
+    # 255 - No data
+    # See user manual to get more information
+    set_streaming_slots(serial_port, 
+                     configuration_dict['logical_ids'], 
+                     configuration_dict['streaming_commands'])
+
+    # Set magnetometer(explain it better), calibGyro if calibGyro=True and Tare sensor
+    print('Starting configuration: ')
+    configure_sensor(serial_port, configuration_dict)
+    print("Done.")
