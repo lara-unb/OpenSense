@@ -18,8 +18,11 @@ def IMUPlacer(model_file, calibration_file):
     # Get the model with the calibrated IMU
     model = imuPlacer.getCalibratedModel()
 
+    calibrated_model_file = 'calibrated_' + model_file
     # Print the calibrated model to file.
-    model.printToXML('calibrated_' + model_file)
+    model.printToXML(calibrated_model_file)
+
+    return calibrated_model_file
 
 
 def IMUInverseKinematics(model_file, orientations_file, time=None):
@@ -30,7 +33,6 @@ def IMUInverseKinematics(model_file, orientations_file, time=None):
     # endTime = 21.89439249             # End time (in seconds) of the tracking simulation.
 
     resultsDirectory = 'IKResults'
-    movFile = resultsDirectory + '/ik_' + orientations_file.split('/')[-1][:-4] + '.mot'
 
     # Instantiate an InverseKinematicsTool
     imuIK = osim.IMUInverseKinematicsTool()
@@ -54,9 +56,8 @@ if __name__ == "__main__":
     modelFile_cal = 'model.osim'          # The path to an input model
     calibrationFile = 'examples/exampleLARA/example_filtered_pos.sto'   # The path to orientation data for calibration
 
-    IMUPlacer(modelFile_cal, calibrationFile)
+    modelFile_ik = IMUPlacer(modelFile_cal, calibrationFile)
 
-    modelFile_ik = 'calibrated_model.osim'                # The path to an input model 
     orientationsFile = 'examples/exampleLARA/example_filtered_mov.sto'   # The path to orientation data for calibration 
 
     IMUInverseKinematics(modelFile_ik, orientationsFile) 

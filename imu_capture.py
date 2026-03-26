@@ -7,11 +7,11 @@ def configureIMU(imus):
 
     serial_port = initialize_dongle(imus)
 
-    imu = IMU(serial_port, imus)
+    imuSystem = IMU(serial_port, imus)
 
-    imu.configure(axisDirections=5)
+    imuSystem.configure(axisDirections=5)
 
-    return imu
+    return imuSystem
 
 
 def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
