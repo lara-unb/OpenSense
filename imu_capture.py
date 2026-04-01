@@ -78,7 +78,9 @@ def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
 
 if __name__ == "__main__":
     
-    imus = {"tibia_r_imu": 10}
+    imus = {"femur_r_imu":3,
+            "tibia_r_imu":6,
+            "Gear_imu":8}
 
     imuSystem = None
 
@@ -87,21 +89,39 @@ if __name__ == "__main__":
         user_input = input("1) Configuração das IMUs\n2) Captura de calibração estática\n3) Captura de movimento\n4) Finalizar sessão\n")
 
         if user_input == "1":
-            imuSystem = configureIMU(imus)
+            try:
+                imuSystem = configureIMU(imus)
+            except Exception as error:
+                    print("Unhandled exception.")
+                    print(error)
+                    print(traceback.format_exc())
+
 
         elif user_input == "2":
             if imuSystem is not None:
-                file_name = input("Digite o nome do arquivo de calibração")
-                IMUCaptureQuaternion(imuSystem, file_name, duration=0.1)
-                file_operations.json_to_sto(file_name, imuSystem.imu_labels, static=True)
+                try:
+                    file_name = input("Digite o nome do arquivo de calibração\n")
+                    IMUCaptureQuaternion(imuSystem, file_name, duration=3)
+                    file_operations.json_to_sto(file_name, imuSystem.imu_labels, static=True)
+                except Exception as error:
+                    print("Unhandled exception.")
+                    print(error)
+                    print(traceback.format_exc())
+                    imuSystem.stop_streaming()
             else:
                 print("\n--- Configure as IMUs antes de realizar a captura! ---")
 
         elif user_input == "3":
             if imuSystem is not None:
-                file_name = input("Digite o nome do arquivo de captura")
-                IMUCaptureQuaternion(imuSystem, file_name)
-                file_operations.json_to_sto(file_name, imuSystem.imu_labels)
+                try:
+                    file_name = input("Digite o nome do arquivo de captura\n")
+                    IMUCaptureQuaternion(imuSystem, file_name)
+                    file_operations.json_to_sto(file_name, imuSystem.imu_labels)
+                except Exception as error:
+                    print("Unhandled exception.")
+                    print(error)
+                    print(traceback.format_exc())
+                    imuSystem.stop_streaming()
             else:
                 print("\n--- Configure as IMUs antes de realizar a captura! ---")
         
