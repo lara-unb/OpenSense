@@ -4,9 +4,11 @@ from matplotlib.animation import FuncAnimation
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 from scipy.interpolate import interp1d
+from scipy.signal import butter, filtfilt
 
 
 def quaternionToEuler(quaternion, sequence='xyz', degrees=False):
+
     q = np.array(quaternion)
 
     rot = R.from_quat(q)
@@ -32,22 +34,27 @@ def getRotationMatrixFromEuler(euler_angles):
                       [np.sin(gamma),  np.cos(gamma), 0],
                       [            0,              0, 1]])
     
-    return rot_x @ rot_y @ rot_z
+    return rot_z @ rot_y @ rot_x
     
 
 def getEulerAnglesFromRotation(rotation_matrix):
     R_11 = rotation_matrix[0][0]
-    R_12 = rotation_matrix[0][1]
-    R_13 = rotation_matrix[0][2]
-    R_23 = rotation_matrix[1][2]
+    R_21 = rotation_matrix[1][0]
+    R_31 = rotation_matrix[2][0]
+    R_32 = rotation_matrix[2][1]
     R_33 = rotation_matrix[2][2]
 
-    alpha = np.atan2(-R_23, R_33) * 180 / np.pi
-    beta = np.asin(R_13) * 180 / np.pi
-    gamma = np.atan2(-R_12, R_11) * 180 / np.pi
+    # Rotação em X (alpha)
+    alpha = np.atan2(R_32, R_33) * 180 / np.pi
+    
+    # Rotação em Y (beta)
+    seno_beta = np.clip(-R_31, -1.0, 1.0) 
+    beta = np.asin(seno_beta) * 180 / np.pi
+    
+    # Rotação em Z (gamma)
+    gamma = np.atan2(R_21, R_11) * 180 / np.pi
 
     return np.array([alpha, beta, gamma])
-
 
 def getTransformMatrix(rot_matrix, origin_point):
 
@@ -60,52 +67,74 @@ def getTransformMatrix(rot_matrix, origin_point):
     return T
 
 
-def getDataframe(json_file, resampling_rate=None):
-
+def getDataframe(json_file, resampling_rate=None, filter_data=True, cutoff_freq=3.0, filter_order=4):
     # Read json and format data
     df = pd.read_json(json_file, lines=True)
-    
     df['time'] = df['time'].astype(float)
 
     cols_imu = [c for c in df.columns if 'imu' in c.lower()]
 
     def parse_imu_string(imu_str):
-        """
-        Transforma "[0.66503 0.33861 0.18432 0.63961]" numa lista de 4 floats.
-        """
+        """ Transforma "[0.66503 0.33861 0.18432 0.63961]" numa lista de 4 floats."""
         clean_str = imu_str.replace('[', '').replace(']', '').strip()
         values = clean_str.split()
-        
         return [float(x) for x in values]
     
     for col in cols_imu:
         df[col] = df[col].apply(parse_imu_string)
 
+    # Descobrir a frequência de amostragem para o filtro
     if resampling_rate is not None:
-        t_original = df['time'].values
+        fs = resampling_rate
+    else:
+        # Se não houver resampling, estima a frequência média baseada no tempo
+        fs = 1.0 / np.mean(np.diff(df['time'].values))
+
+    # Configuração do Filtro Butterworth Low-Pass
+    if filter_data:
+        nyquist = 0.5 * fs
+        normal_cutoff = cutoff_freq / nyquist
+        # btype='low' suaviza movimentos bruscos e remove ruídos de alta frequência
+        b, a = butter(filter_order, normal_cutoff, btype='low', analog=False)
+
+    # Novo vetor de tempo (se houver resampling)
+    t_original = df['time'].values
+    if resampling_rate is not None:
         t_new = np.linspace(t_original[0], t_original[-1], int((t_original[-1] - t_original[0]) * resampling_rate))
+    else:
+        t_new = t_original
 
-        def interpolate_quat(col_name):
-            quats = np.array(df[col_name].tolist())
+    def process_quaternions(col_name):
+        quats = np.array(df[col_name].tolist())
+        
+        # 1. Interpolação (Resampling)
+        if resampling_rate is not None:
             f = interp1d(t_original, quats, axis=0, kind='linear')
-            interp_q = f(t_new)
+            quats = f(t_new)
 
-            return interp_q / np.linalg.norm(interp_q, axis=1)[:, np.newaxis]
-    
+        # 2. Filtragem Butterworth
+        if filter_data:
+            # filtfilt garante que a fase não seja distorcida (sem atraso no tempo)
+            quats = filtfilt(b, a, quats, axis=0)
+
+        # 3. Normalização (Crucial para quatérnios após interpolação ou filtragem!)
+        norms = np.linalg.norm(quats, axis=1)[:, np.newaxis]
+        return quats / norms
+
+    # Aplica o processamento (Interpolação -> Filtro -> Normalização)
+    if resampling_rate is not None:
         df_new = pd.DataFrame()
         df_new['time'] = t_new
-
         for col in cols_imu:
-            df_new[f"{col}"] = list(interpolate_quat(col))
-
+            df_new[f"{col}"] = list(process_quaternions(col))
         df = df_new
+    else:
+        for col in cols_imu:
+            df[col] = list(process_quaternions(col))
 
     # Convert Quaternion in Euler Angles
-    
     for col in cols_imu:
         df[f"{col}_euler"] = df[col].apply(quaternionToEuler)
-
-    print(df)
 
     return df
 
@@ -152,7 +181,7 @@ def getPoints(rot_shoulder_global, rot_elbow_global):
     return p_origin_elbow_G, p_hand_G
 
 
-def show_animation(p_elbow, p_hand, time):
+def show_animation(p_elbow, p_hand, time, interval):
     """
     Anima dois vetores 3D a partir de matrizes de coordenadas.
     
@@ -202,7 +231,7 @@ def show_animation(p_elbow, p_hand, time):
         return q1, q2, time_text
 
     # Cria a animação
-    animation = FuncAnimation(fig, update, frames=len(p_elbow), interval=40)
+    animation = FuncAnimation(fig, update, frames=len(p_elbow), interval=interval)
     
     plt.show()
 
@@ -210,8 +239,10 @@ def show_animation(p_elbow, p_hand, time):
 if __name__ == "__main__":
 
     json_file = 'tchau.json'
+
+    resampling_rate = 15
     
-    df = getDataframe(json_file, resampling_rate=25)
+    df = getDataframe(json_file, resampling_rate=resampling_rate)
 
     time = df['time'].to_numpy()
 
@@ -219,9 +250,16 @@ if __name__ == "__main__":
 
     rot_elbow_shoulder = [rot_s_g.T @ rot_e_g for rot_s_g, rot_e_g in zip(rot_shoulder_global, rot_elbow_global)]
 
-    knee_angles = getEulerAnglesFromRotation(rot_elbow_shoulder)
-    print(knee_angles[0:2])
+    knee_angles = np.array([getEulerAnglesFromRotation(rot_e_s) for rot_e_s in rot_elbow_shoulder])
 
     p_elbow, p_hand = getPoints(rot_shoulder_global, rot_elbow_global)
+
+    fig, ax = plt.subplots()
+    ax.plot(p_elbow[:, 0], p_elbow[:,1])
+    plt.show()
+
+    fig, ax = plt.subplots()
+    ax.plot(time, knee_angles[:,2])
+    plt.show()
     
-    show_animation(p_elbow, p_hand, time)
+    show_animation(p_elbow, p_hand, time, 1000/resampling_rate)
