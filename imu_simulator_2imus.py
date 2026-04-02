@@ -238,6 +238,8 @@ def show_animation(p_elbow, p_hand, time, interval):
 # --- Exemplo de Uso ---
 if __name__ == "__main__":
 
+    # SETUP
+
     json_file = 'tchau.json'
 
     resampling_rate = 15
@@ -246,6 +248,8 @@ if __name__ == "__main__":
 
     time = df['time'].to_numpy()
 
+    # CALCULO ROTACOES E POSICOES
+
     rot_shoulder_global, rot_elbow_global = getSystemRotationMatrixes(df, calibrate_imu_position=False)
 
     rot_elbow_shoulder = [rot_s_g.T @ rot_e_g for rot_s_g, rot_e_g in zip(rot_shoulder_global, rot_elbow_global)]
@@ -253,6 +257,8 @@ if __name__ == "__main__":
     knee_angles = np.array([getEulerAnglesFromRotation(rot_e_s) for rot_e_s in rot_elbow_shoulder])
 
     p_elbow, p_hand = getPoints(rot_shoulder_global, rot_elbow_global)
+
+    # GERACAO DOS GRAFICOS E ANIMACAO
 
     fig, ax = plt.subplots()
     ax.plot(p_elbow[:, 0], p_elbow[:,1])
