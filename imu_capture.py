@@ -78,9 +78,8 @@ def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
 
 if __name__ == "__main__":
     
-    imus = {"femur_r_imu":3,
-            "tibia_r_imu":6,
-            "Gear_imu":8}
+    imus = {"femur_r_imu":9,
+            "tibia_r_imu":10}
 
     imuSystem = None
 
