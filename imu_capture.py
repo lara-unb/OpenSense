@@ -2,6 +2,7 @@ from utils.imu_class import IMU, initialize_dongle
 import utils.file_operations as file_operations
 import time
 import traceback
+import numpy as np
 
 def configureIMU(imus):
 
@@ -20,12 +21,13 @@ def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
     imus_data = []
     quaternions = {}
     for i in range(len(imu.imu_labels)):
-        quaternions[imu.imu_labels[i]] = [0, 0, 0, 0]
+        quaternions[imu.imu_labels[i]] = np.array([0, 0, 0, 0])
     try:
         imu.start_streaming(frequency = 100)
         imu.serial_port.reset_input_buffer()
 
         while_condition = True
+        capture_started = False
 
         while while_condition:
             try:
@@ -45,6 +47,14 @@ def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
                 # extract quaternion data from the first IMU
                 for i in range(len(imu.imus)):
                     if data[1] == imu.imu_ids[i]:
+                        if not imu.streaming_status[i]:
+                            print(f"IMU {imu.imu_labels[i]}: {imu.imu_ids[i]} conectada")
+                            imu.streaming_status[i] = True
+
+                            if all(imu.streaming_status):
+                                capture_started = True
+                                print("Coleta iniciada!")
+
                         extracted_data = imu.extract_data(data, type_of_data=0, imu_id=imu.imu_ids[i])
                         quaternions[imu.imu_labels[i]] = extracted_data
                 
@@ -57,6 +67,8 @@ def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
                 # discard first second of IMU data readings
                 if (time.time() - startTime < 1) and discard_first_sec:
                     continue
+                elif not all(imu.streaming_status):
+                    continue
                 else:
                     imus_data.append(imus_reading)
 
@@ -64,8 +76,11 @@ def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
                 print("Finished execution with control + c. ")
                 break
         
-        for line in imus_data:
-            file_operations.write_to_json_file(file_path+'.json', line, write_mode='a')
+        if capture_started:
+            for line in imus_data:
+                file_operations.write_to_json_file(file_path+'.json', line, write_mode='a')
+        else:
+            print("Coleta vazia, JSON não criado")
                 
         imu.stop_streaming()
 
@@ -78,8 +93,13 @@ def IMUCaptureQuaternion(imu, file_path, duration=None, discard_first_sec=True):
 
 if __name__ == "__main__":
     
-    imus = {"femur_r_imu":9,
-            "tibia_r_imu":10}
+    imus = {"femur_l_imu": 3,
+            "tibia_l_imu": 9,
+            "femur_r_imu": 4,
+            "tibia_r_imu": 10,
+            "pelvis_imu" : 8}
+
+    # imus = {"femur_l_imu": 4}
 
     imuSystem = None
 
