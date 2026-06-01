@@ -1,6 +1,0 @@
-pyserial
-numpy
-pandas
-scipy
-openpyxl
-streamlit
