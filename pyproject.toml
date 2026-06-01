@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lara_opensense"
+version = "0.1.0"
+description = "Pacote utilitário para o projeto OpenSense do LARA UnB"
+dependencies = ["pyserial", "numpy", "pandas", "scipy", "openpyxl", "streamlit"]
+
+[tool.setuptools.packages.find]
+include = ["lara_opensense*"]
