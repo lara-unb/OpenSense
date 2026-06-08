@@ -4,3 +4,4 @@ opensim.log
 lara_opensense.egg-info
 .vscode
 *__pycache__*
+lara_opensense/__pycache__/*
