@@ -1,7 +1,7 @@
 import lara_opensense.imu_simulator as imu_simulator
 from lara_opensense.segment import Segment
 
-json_file = 'Treinamento/CinematicaInversa/mov_arm'
+json_file = 'Training/CinematicaInversa/mov_arm.json'
 
 rot_seq = 'zyx'
 

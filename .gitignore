@@ -1,7 +1,6 @@
 .venv
-utils/__pycache__
 opensim.log
-.envOpensense
+.env*
 lara_opensense.egg-info
 .vscode
-__pycache__
+*__pycache__*
